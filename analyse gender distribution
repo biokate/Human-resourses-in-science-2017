@@ -1,0 +1,87 @@
+# Install required packages
+install.packages("eurostat")
+library("eurostat")
+library(gridExtra)
+library(grid)
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+
+#To look at all datasets contained the word "science" 
+query <- search_eurostat("science", type = "table")
+query[3,1:2]
+
+#To load required dataset
+dat1 <- get_eurostat(id="tsc00025", time_format = "num")
+dat1<- label_eurostat(dat1)
+head(dat1)
+
+#Choose countries. If you want, you can choose other countries. Use two-letter ID of country. 
+#Remember only European Union countries areincluded
+dat <- get_eurostat(id="tsc00025", time_format = "num", filters = list(geo = c("NL", "AT", "FR", "DE","PL", "EU28")))
+
+dat<- dat [, -(1:3)]
+dat<- spread(dat, sex, values)
+
+glimpse(dat)
+summary(dat)
+head(dat)
+
+#Plotting
+total <- dat %>%
+    ggplot(aes(x = as.factor(time), y = T, color = geo, group = geo))+
+    geom_point(size= 2)+
+    geom_line()+
+    labs(title = "People engaged into science", x = "years", y = "Total, %")+
+    theme(axis.text.x = element_text(angle=60, hjust=1))
+
+female <- dat %>%
+  ggplot(aes(x = as.factor(time), y = F, color = geo, group = geo))+
+  geom_point(size= 2)+
+  geom_line()+
+  labs(x = "years", y = "female, % of active population")+
+  theme(axis.text.x = element_text(angle=60, hjust=1))
+
+male <- dat %>%
+  ggplot(aes(x = as.factor(time), y = M, color = geo, group = geo))+
+  geom_point(size= 2)+
+  geom_line()+
+  labs(x = "years", y = "male, % of active population")+
+  theme(axis.text.x = element_text(angle=60, hjust=1))
+
+# Function to make legend shared for two plots
+grid_arrange_shared_legend <- function(..., ncol = length(list(...)), nrow = 1, position = c("bottom", "right")) {
+  
+  plots <- list(...)
+  position <- match.arg(position)
+  g <- ggplotGrob(plots[[1]] + theme(legend.position = position))$grobs
+  legend <- g[[which(sapply(g, function(x) x$name) == "guide-box")]]
+  lheight <- sum(legend$height)
+  lwidth <- sum(legend$width)
+  gl <- lapply(plots, function(x) x + theme(legend.position="none"))
+  gl <- c(gl, ncol = ncol, nrow = nrow)
+  
+  combined <- switch(position,
+                     "bottom" = arrangeGrob(do.call(arrangeGrob, gl),
+                                            legend,
+                                            ncol = 1,
+                                            heights = unit.c(unit(1, "npc") - lheight, lheight)),
+                     "right" = arrangeGrob(do.call(arrangeGrob, gl),
+                                           legend,
+                                           ncol = 2,
+                                           widths = unit.c(unit(1, "npc") - lwidth, lwidth)))
+  
+  grid.newpage()
+  grid.draw(combined)
+  
+  # return gtable invisibly
+  invisible(combined)
+  
+}
+
+#Let's put two plots for female and male side-to-side and share legend
+
+grid.arrange(nrow = 1,
+  top = "Human resources in science and technology",
+  grid_arrange_shared_legend(female, male))
+ggsave("plot_female_vs_male.png", width = 8, height = 8)
